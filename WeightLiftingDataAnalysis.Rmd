@@ -1,0 +1,120 @@
+---
+title: "Analysis of Weight Lifting Exercises Dataset"
+author: "Blane McCarthy"
+date: "September 10, 2016"
+output: html_document
+---
+
+##Overview
+
+In this project weight lifting exercise data was analyzed in a effort to replicate some of the aspects of the study described in *Qualitative Activity Recognition of Weight Lifting Exercises*^1.^ 
+
+The data was aquired from the Coursera Johns Hopkins Pratical Machine Learning course at the following source:
+http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The original source for the data for this project is: http://groupware.les.inf.puc-rio.br/har. 
+
+The data contained 19622 observations with 160 variables
+
+
+##Exploritory Data Analysis
+
+The data was loaded into R-studio and basic exploratory data analyses was performed. The analysis included summaries of the data and a check for missing values.  
+
+```{r, warning=FALSE, results='hide'}
+library(caret)
+```
+
+```{r}
+setwd("~/Desktop/Coursera/Practical Machine Learning/Project")
+PMLtrainingData <- read.csv("pml-training.csv", header=TRUE)
+
+```
+The summary shows that of the 160 variables in the data 100 of them contained NA or Null values in 19216 of the 19622 observations.  It also showed that the first seven variables contain data that are discriptive of each observation.
+
+```{r}
+colnames(PMLtrainingData[,1:7])
+```
+
+As a result the decision was made to limit the dataset to the 53 remaining observations.  The data was first segmented into a training and a test set using the createDataPartition function of the caret package.  75% of the data was allocated to the training set. 
+
+```{r}
+set.seed(12345)
+inTrain <- createDataPartition(y=PMLtrainingData$classe, p=0.75, list=FALSE)
+trainingData <- PMLtrainingData[inTrain,]
+testingData <- PMLtrainingData[-inTrain,]
+dim(trainingData)
+dim(testingData)
+```
+
+Each of the variables in the training set which fell into the group of 100 variables to discard due to the high number of Na or Null valued observartions contained 14408 observations that were either Na or Null.  Any variables containing fewer than 14408 Na values and more than 14407 non-Null values was kept for the analysis. Then the first seven variables were discarded as previously discussed.
+
+```{r}
+goodTrainCols <- trainingData[colSums(is.na(trainingData)) < 14408]
+goodTrainCols2 <- goodTrainCols[, colSums(goodTrainCols != "") > 14407]
+TrainData <- goodTrainCols2[8:60]
+dim(TrainData)
+```
+
+The remaining 53 variables were analysed for Near Zero Variance.  None of the variables was found to have zero or near zero variance.  Therefore all 53 variables were retained for use in the model.
+
+```{r}
+nsv <- nearZeroVar(TrainData, saveMetrics = TRUE)
+
+nsv$nzv
+
+nsv$zeroVar
+```
+
+&nbsp; 
+
+A Random Forest model was used with ten fold cross validation.  This approach was chosen in an effort to more closely replicate the approach that was documented by Velloso, E. et al.
+
+
+```{r,cache=TRUE,warning=FALSE}
+
+set.seed(12345)
+
+x <- TrainData[,-53]
+y <- TrainData[,53]
+
+fitControl <- trainControl(method = "cv", number = 10, allowParallel = FALSE)
+
+fitClasse <- train( x, y, method="rf", data=TrainData, trControl = fitControl, ntree=10)
+
+fitClasse
+
+fitClasse$finalModel
+```
+
+The test set was modified to contain only the variables present in the training set. Then the predict function of the caret package was used to predict the classe values of the test set. 
+
+```{r, warning=FALSE, message=FALSE}
+
+goodTestCols <- testingData[, names(testingData) %in% names(TrainData)]
+
+predClasse <- predict(fitClasse, goodTestCols)
+```
+
+A confusion matrix was used to determine the accuracy of the predictions.
+
+```{r,}
+confusionMatrix(predClasse, testingData$classe)
+
+```
+
+##Conclusions 
+
+The results of the Random Forest model showed that the expected out of sample error rate is 3.14%.  
+
+When the model was applied to the test set it resulted in a accuracy rate of 98.76%.  It also showed the sensitivity, specificity and positive and negative predictive values for all classes to be above 97%
+
+\pagebreak
+
+
+##References
+
+1. Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th Augmented Human (AH) International Conference in cooperation with ACM SIGCHI (Augmented Human'13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201#ixzz4KEc13al2
+
